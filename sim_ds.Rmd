@@ -1,0 +1,73 @@
+
+```{r}
+rm(list=objects())
+library(NonpModelCheck)
+
+g <- function(x){2-5*x[,1] + x[,4] +5*exp(-50*(x[,2]-.3)**2) - 1*cos(3*x[,3])*x[,4]}
+SD <- c(4,2,1,.5,.2)[3]
+KT <- c("gaussian","biweight","epanech",
+        "triangular","box","trun.normal")[1]
+
+bw <- seq(0.1,1.6,0.04) # bandwidth series for plot
+
+x1 <- rnorm(100,0.5,0.65)
+x2 <- rbeta(100,1,3)
+x3 <- rgamma(100,0.2,0.4)
+x4 <- runif(100,0,1)
+x <- cbind(x1,x2,x3,x4) # a matrix of observations. uniform, normal, beta distribution are considered
+x.pred <- matrix(rep(seq(0.1,0.9,0.01),4),ncol = ncol(x)) # where we compare estimating values with ture values
+
+fold.num <- 5
+sim.num <- 600
+G <- g(x.pred)
+L <- nrow(x)
+
+rst.mise <-matrix(nrow = fold.num+1,ncol = length(bw))
+rst.bias <-matrix(nrow = fold.num+1,ncol = length(bw))
+
+j <- 0
+pb <- txtProgressBar(min = bw[1], max = bw[length(bw)], style = 3)
+for(B in bw){
+  j <- j+1
+  ll<-function(a, b, c){
+    localpoly.reg(a, b, c, bandwidth = rep(B,ncol(x)), 
+                  degree.pol = 1, kernel.type = KT,
+                  deriv = 0)[5]$predicted
+  }
+  mise <- matrix(ncol = sim.num,nrow = fold.num+1)
+  
+  for(i in 1:sim.num){
+    y <- g(x) + rnorm(L,sd=SD)
+    y.hat <- ll(x,y,x)
+    y.t <- 2*y - y.hat
+    dif <- ll(x, y ,x.pred) - G
+    mise[1,i] <- sum(dif**2 * (x.pred[2,1]-x.pred[1,1])^ncol(x))  # use Riemann sum to estimate mise
+    
+    for(k in 1:fold.num+1){
+      dif <- ll(x, y.t ,x.pred) - G
+      mise[k,i] <- sum(dif**2 * (x.pred[2,1]-x.pred[1,1])^ncol(x))
+      y.t <- y + y.t - ll(x, y.t ,x)
+    }
+  } 
+  rst.mise[,which(bw==B)] <- apply(mise,1,mean)
+  setTxtProgressBar(pb, B)
+}
+close(pb)
+```
+
+```{r}
+plot(bw ,rst.mise[1,],type="l",ylim=c(1*10**-6,2.5*10**-6),col="grey")
+lines(bw ,rst.mise[2,],col=1)
+lines(bw ,rst.mise[6,],col=2)
+```
+
+```{r}
+
+# This is a fig of target function
+xx <- seq(0,1,.01)
+plot(2- 5*xx +xx +5*exp(-50*(xx-.3)**2) - 1*cos(3*xx)*xx,type="l")
+plot(2- 5*xx + 5*exp(-50*(xx-.3)**2) - 1*cos(3*xx)*xx + rnorm(length(xx),0,1),type="l")
+```
+
+
+
